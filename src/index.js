@@ -67,15 +67,46 @@ async function main() {
       try {
         logger.info(`Processing sheet: ${sheetConfig.name}`);
 
+        // Build list of cells to fetch
+        const cellsToFetch = [
+          sheetConfig.currentSuppliesCell,
+          sheetConfig.dailyConsumptionCell,
+        ];
+        if (sheetConfig.restingStatusCell) {
+          cellsToFetch.push(sheetConfig.restingStatusCell);
+        }
+
         // Get data from Google Sheets using batch API to reduce quota usage
         const cellValues = await sheetsService.getCellValuesBatch(
           sheetConfig.sheetId,
-          [sheetConfig.currentSuppliesCell, sheetConfig.dailyConsumptionCell],
+          cellsToFetch,
           sheetConfig.sheetName
         );
 
         const currentSupplies = cellValues[sheetConfig.currentSuppliesCell];
         const dailyConsumption = cellValues[sheetConfig.dailyConsumptionCell];
+        const restingStatusRaw = sheetConfig.restingStatusCell
+          ? cellValues[sheetConfig.restingStatusCell]
+          : null;
+
+        // Determine resting status if provided (Google Sheets boolean checkboxes often return TRUE/FALSE)
+        const isResting = (() => {
+          if (restingStatusRaw === null || restingStatusRaw === undefined) {
+            return false;
+          }
+          if (typeof restingStatusRaw === "boolean") return restingStatusRaw;
+          if (typeof restingStatusRaw === "string") {
+            const normalized = restingStatusRaw.trim().toLowerCase();
+            return ["true", "yes", "y", "1"].includes(normalized);
+          }
+          return false;
+        })();
+
+        if (isResting) {
+          logger.info(
+            `${sheetConfig.name} is resting today (restingStatusCell=${sheetConfig.restingStatusCell}). Skipping supply deduction.`
+          );
+        }
 
         // Validate that we got values
         if (currentSupplies === null || currentSupplies === undefined) {
@@ -89,7 +120,7 @@ async function main() {
           );
         }
 
-        // Calculate new supply value after daily consumption
+        // Calculate new supply value after daily consumption (if not resting)
         const currentSuppliesFloat = parseNumericValue(currentSupplies);
         const dailyConsumptionFloat = parseNumericValue(dailyConsumption);
 
@@ -103,22 +134,21 @@ async function main() {
           throw new Error("Daily consumption must be greater than 0");
         }
 
-        const newSupplyValue = Math.max(
-          0,
-          currentSuppliesFloat - dailyConsumptionFloat
-        );
+        const newSupplyValue = isResting
+          ? currentSuppliesFloat // no change while resting
+          : Math.max(0, currentSuppliesFloat - dailyConsumptionFloat);
 
-        // Check if supplies are already at zero or will hit zero
+        // Check if supplies are already at zero or will hit zero (only relevant if not resting)
         const suppliesWereZero = currentSuppliesFloat === 0;
-        const suppliesHitZero =
+        const suppliesHitZero = !isResting &&
           currentSuppliesFloat > 0 && newSupplyValue === 0;
 
         logger.info(
-          `${sheetConfig.name}: Current supplies: ${currentSuppliesFloat}, Daily consumption: ${dailyConsumptionFloat}, New supply value: ${newSupplyValue}`
+          `${sheetConfig.name}: Current supplies: ${currentSuppliesFloat}, Daily consumption: ${dailyConsumptionFloat}, New supply value: ${newSupplyValue}, Resting: ${isResting}`
         );
 
-        // Only update the sheet if supplies weren't already at zero
-        if (!suppliesWereZero) {
+        // Only update the sheet if supplies weren't already at zero and not resting
+        if (!suppliesWereZero && !isResting) {
           // Update the current supplies in the Google Sheet
           await sheetsService.updateCellValue(
             sheetConfig.sheetId,
@@ -127,8 +157,12 @@ async function main() {
             sheetConfig.sheetName
           );
 
-          logger.info(
+            logger.info(
             `Updated ${sheetConfig.name} current supplies from ${currentSuppliesFloat} to ${newSupplyValue}`
+          );
+        } else if (isResting) {
+          logger.info(
+            `${sheetConfig.name} is resting - no supply update performed`
           );
         } else {
           logger.info(
@@ -137,7 +171,7 @@ async function main() {
         }
 
         // Send appropriate Discord notification based on supply status
-        if (suppliesWereZero || suppliesHitZero) {
+        if (!isResting && (suppliesWereZero || suppliesHitZero)) {
           await discordNotifier.sendZeroSupplies({
             name: sheetConfig.name,
             suppliesWereAlreadyZero: suppliesWereZero,
@@ -146,14 +180,14 @@ async function main() {
           });
         } else {
           // Calculate days remaining based on the new supply value
-          const daysRemaining = calculateDaysRemaining(
+            const daysRemaining = calculateDaysRemaining(
             newSupplyValue,
             dailyConsumptionFloat
           );
 
-          // Send normal Discord notification
+          // Send normal Discord notification (include resting state in name maybe)
           await discordNotifier.sendSupplyStatus({
-            name: sheetConfig.name,
+            name: sheetConfig.name + (isResting ? " (Resting)" : ""),
             currentSupplies: newSupplyValue,
             dailyConsumption: dailyConsumptionFloat,
             daysRemaining,
@@ -168,7 +202,7 @@ async function main() {
               : `${calculateDaysRemaining(
                   newSupplyValue,
                   dailyConsumptionFloat
-                )} days remaining`
+                )} days remaining${isResting ? " (resting day)" : ""}`
           }`
         );
       } catch (error) {

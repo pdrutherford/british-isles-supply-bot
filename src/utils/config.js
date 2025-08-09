@@ -78,6 +78,15 @@ function validateConfig(config) {
         `Sheet configuration ${index} has invalid dailyConsumptionCell: ${sheetConfig.dailyConsumptionCell}`
       );
     }
+
+    // Optional resting status cell
+    if (sheetConfig.restingStatusCell) {
+      if (!isValidCellAddress(sheetConfig.restingStatusCell)) {
+        throw new Error(
+          `Sheet configuration ${index} has invalid restingStatusCell: ${sheetConfig.restingStatusCell}`
+        );
+      }
+    }
   });
 
   logger.info(`Configuration validation passed for ${config.length} sheets`);
