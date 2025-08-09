@@ -25,6 +25,9 @@ class DiscordNotifier {
     dailyConsumption,
     daysRemaining,
     webhookUrl,
+    totalCarried,
+    carryingCapacity,
+    overCapacity,
   }) {
     const color = this.getStatusColor(daysRemaining);
     const statusEmoji = this.getStatusEmoji(daysRemaining);
@@ -58,9 +61,27 @@ class DiscordNotifier {
           value: this.getZeroSuppliesDate(daysRemaining),
           inline: false,
         },
+        {
+          name: "🧺 Total Carried",
+          value: `${totalCarried}`,
+          inline: true,
+        },
+        {
+          name: "💪 Carrying Capacity",
+          value: `${carryingCapacity}`,
+          inline: true,
+        },
       ],
       timestamp: new Date().toISOString(),
     };
+
+    if (overCapacity) {
+      embed.fields.push({
+        name: "⚠️ Capacity Alert",
+        value: `Total carried (${totalCarried}) exceeds carrying capacity (${carryingCapacity}). Reduce load!`,
+        inline: false,
+      });
+    }
 
     const payload = {
       embeds: [embed],
@@ -71,6 +92,12 @@ class DiscordNotifier {
       payload.content = `🚨 **URGENT**: ${name} supplies are critically low! Only ${daysRemaining} days remaining.`;
     } else if (daysRemaining <= 7) {
       payload.content = `⚠️ **WARNING**: ${name} supplies are running low. ${daysRemaining} days remaining.`;
+    }
+
+    if (overCapacity) {
+      payload.content =
+        (payload.content ? payload.content + "\n" : "") +
+        `⚠️ **OVER CAPACITY**: Carried ${totalCarried} / Capacity ${carryingCapacity}`;
     }
 
     await this.sendWebhook(webhookUrl, payload);
@@ -110,6 +137,9 @@ class DiscordNotifier {
     suppliesWereAlreadyZero,
     dailyConsumption,
     webhookUrl,
+    totalCarried,
+    carryingCapacity,
+    overCapacity,
   }) {
     const embed = {
       title: `🚨 ZERO SUPPLIES ALERT: ${name}`,
@@ -142,16 +172,38 @@ class DiscordNotifier {
             : "Supplies have just been depleted today",
           inline: false,
         },
+        {
+          name: "🧺 Total Carried",
+          value: `${totalCarried}`,
+          inline: true,
+        },
+        {
+          name: "💪 Carrying Capacity",
+          value: `${carryingCapacity}`,
+          inline: true,
+        },
       ],
       timestamp: new Date().toISOString(),
     };
+
+    if (overCapacity) {
+      embed.fields.push({
+        name: "⚠️ Capacity Alert",
+        value: `Total carried (${totalCarried}) exceeds carrying capacity (${carryingCapacity}). Reduce load!`,
+        inline: false,
+      });
+    }
 
     const urgentMessage = suppliesWereAlreadyZero
       ? `🚨 **CRITICAL**: ${name} supplies are STILL at ZERO! No supplies available for consumption.`
       : `🚨 **CRITICAL**: ${name} supplies have reached ZERO today! Immediate restocking required.`;
 
     const payload = {
-      content: urgentMessage,
+      content:
+        urgentMessage +
+        (overCapacity
+          ? `\n⚠️ **OVER CAPACITY**: Carried ${totalCarried} / Capacity ${carryingCapacity}`
+          : ""),
       embeds: [embed],
     };
 

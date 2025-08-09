@@ -6,7 +6,9 @@
     "webhookUrl": "https://discord.com/api/webhooks/123456789/abcdefghijklmnop?thread_id=111222333",
     "currentSuppliesCell": "B2",
     "dailyConsumptionCell": "B3",
-    "restingStatusCell": "B4"
+    "restingStatusCell": "B4",
+    "totalCarriedCell": "B5",
+    "currentCarryingCapacityCell": "B6"
   },
   {
     "name": "Saraian 1st Army",
@@ -14,6 +16,8 @@
     "webhookUrl": "https://discord.com/api/webhooks/987654321/qrstuvwxyzabcdef",
     "currentSuppliesCell": "B2",
     "dailyConsumptionCell": "B3",
-    "restingStatusCell": "B4"
+    "restingStatusCell": "B4",
+    "totalCarriedCell": "B5",
+    "currentCarryingCapacityCell": "B6"
   }
 ]

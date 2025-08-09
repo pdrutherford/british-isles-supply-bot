@@ -47,6 +47,9 @@ function validateConfig(config) {
       "webhookUrl",
       "currentSuppliesCell",
       "dailyConsumptionCell",
+      // New required fields for carrying metrics
+      "totalCarriedCell",
+      "currentCarryingCapacityCell",
     ];
 
     for (const field of requiredFields) {
@@ -76,6 +79,18 @@ function validateConfig(config) {
     if (!isValidCellAddress(sheetConfig.dailyConsumptionCell)) {
       throw new Error(
         `Sheet configuration ${index} has invalid dailyConsumptionCell: ${sheetConfig.dailyConsumptionCell}`
+      );
+    }
+
+    if (!isValidCellAddress(sheetConfig.totalCarriedCell)) {
+      throw new Error(
+        `Sheet configuration ${index} has invalid totalCarriedCell: ${sheetConfig.totalCarriedCell}`
+      );
+    }
+
+    if (!isValidCellAddress(sheetConfig.currentCarryingCapacityCell)) {
+      throw new Error(
+        `Sheet configuration ${index} has invalid currentCarryingCapacityCell: ${sheetConfig.currentCarryingCapacityCell}`
       );
     }
 

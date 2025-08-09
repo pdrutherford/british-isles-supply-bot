@@ -71,6 +71,8 @@ async function main() {
         const cellsToFetch = [
           sheetConfig.currentSuppliesCell,
           sheetConfig.dailyConsumptionCell,
+          sheetConfig.totalCarriedCell,
+          sheetConfig.currentCarryingCapacityCell,
         ];
         if (sheetConfig.restingStatusCell) {
           cellsToFetch.push(sheetConfig.restingStatusCell);
@@ -85,6 +87,8 @@ async function main() {
 
         const currentSupplies = cellValues[sheetConfig.currentSuppliesCell];
         const dailyConsumption = cellValues[sheetConfig.dailyConsumptionCell];
+        const totalCarriedRaw = cellValues[sheetConfig.totalCarriedCell];
+        const carryingCapacityRaw = cellValues[sheetConfig.currentCarryingCapacityCell];
         const restingStatusRaw = sheetConfig.restingStatusCell
           ? cellValues[sheetConfig.restingStatusCell]
           : null;
@@ -119,14 +123,26 @@ async function main() {
             `No data found in daily consumption cell ${sheetConfig.dailyConsumptionCell}`
           );
         }
+        if (totalCarriedRaw === null || totalCarriedRaw === undefined) {
+          throw new Error(
+            `No data found in total carried cell ${sheetConfig.totalCarriedCell}`
+          );
+        }
+        if (carryingCapacityRaw === null || carryingCapacityRaw === undefined) {
+          throw new Error(
+            `No data found in carrying capacity cell ${sheetConfig.currentCarryingCapacityCell}`
+          );
+        }
 
         // Calculate new supply value after daily consumption (if not resting)
         const currentSuppliesFloat = parseNumericValue(currentSupplies);
         const dailyConsumptionFloat = parseNumericValue(dailyConsumption);
+        const totalCarried = parseNumericValue(totalCarriedRaw);
+        const carryingCapacity = parseNumericValue(carryingCapacityRaw);
 
-        if (isNaN(currentSuppliesFloat) || isNaN(dailyConsumptionFloat)) {
+        if (isNaN(currentSuppliesFloat) || isNaN(dailyConsumptionFloat) || isNaN(totalCarried) || isNaN(carryingCapacity)) {
           throw new Error(
-            "Invalid supply or consumption values - must be numbers"
+            "Invalid supply, consumption, carried, or capacity values - must be numbers"
           );
         }
 
@@ -144,7 +160,7 @@ async function main() {
           currentSuppliesFloat > 0 && newSupplyValue === 0;
 
         logger.info(
-          `${sheetConfig.name}: Current supplies: ${currentSuppliesFloat}, Daily consumption: ${dailyConsumptionFloat}, New supply value: ${newSupplyValue}, Resting: ${isResting}`
+          `${sheetConfig.name}: Current supplies: ${currentSuppliesFloat}, Daily consumption: ${dailyConsumptionFloat}, New supply value: ${newSupplyValue}, Resting: ${isResting}, Total carried: ${totalCarried}, Carrying capacity: ${carryingCapacity}`
         );
 
         // Only update the sheet if supplies weren't already at zero and not resting
@@ -177,21 +193,25 @@ async function main() {
             suppliesWereAlreadyZero: suppliesWereZero,
             dailyConsumption: dailyConsumptionFloat,
             webhookUrl: sheetConfig.webhookUrl,
+            totalCarried,
+            carryingCapacity,
+            overCapacity: totalCarried > carryingCapacity,
           });
         } else {
-          // Calculate days remaining based on the new supply value
             const daysRemaining = calculateDaysRemaining(
             newSupplyValue,
             dailyConsumptionFloat
           );
 
-          // Send normal Discord notification (include resting state in name maybe)
           await discordNotifier.sendSupplyStatus({
             name: sheetConfig.name + (isResting ? " (Resting)" : ""),
             currentSupplies: newSupplyValue,
             dailyConsumption: dailyConsumptionFloat,
             daysRemaining,
             webhookUrl: sheetConfig.webhookUrl,
+            totalCarried,
+            carryingCapacity,
+            overCapacity: totalCarried > carryingCapacity,
           });
         }
 
@@ -203,7 +223,7 @@ async function main() {
                   newSupplyValue,
                   dailyConsumptionFloat
                 )} days remaining${isResting ? " (resting day)" : ""}`
-          }`
+          } | Carry: ${totalCarried}/${carryingCapacity}`
         );
       } catch (error) {
         logger.error(`Error processing sheet ${sheetConfig.name}:`, error);
