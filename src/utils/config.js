@@ -47,7 +47,6 @@ function validateConfig(config) {
       "webhookUrl",
       "currentSuppliesCell",
       "dailyConsumptionCell",
-      // New required fields for carrying metrics
       "totalCarriedCell",
       "currentCarryingCapacityCell",
     ];
@@ -102,6 +101,28 @@ function validateConfig(config) {
         );
       }
     }
+
+    // New optional cells (updated loot fields)
+    const optionalCells = [
+      { key: "ownedAndCarriedLootCell", label: "ownedAndCarriedLootCell" },
+      { key: "paidAndCarriedLootCell", label: "paidAndCarriedLootCell" },
+      { key: "currentMoraleCell", label: "currentMoraleCell" },
+      { key: "restingMoraleCell", label: "restingMoraleCell" },
+      { key: "armyLengthCell", label: "armyLengthCell" },
+      { key: "forcedMarchDaysCell", label: "forcedMarchDaysCell" },
+      { key: "shippingStatusCell", label: "shippingStatusCell" },
+      { key: "supplyShipsCountCell", label: "supplyShipsCountCell" },
+    ];
+
+    optionalCells.forEach(({ key, label }) => {
+      if (sheetConfig[key]) {
+        if (!isValidCellAddress(sheetConfig[key])) {
+          throw new Error(
+            `Sheet configuration ${index} has invalid ${label}: ${sheetConfig[key]}`
+          );
+        }
+      }
+    });
   });
 
   logger.info(`Configuration validation passed for ${config.length} sheets`);

@@ -56,6 +56,7 @@ async function main() {
     // Process each sheet configuration with rate limiting
     for (let i = 0; i < config.length; i++) {
       const sheetConfig = config[i];
+      const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetConfig.sheetId}/edit`; // Link to the spreadsheet
 
       // Add delay between sheets to avoid quota limits
       if (i > 0) {
@@ -77,6 +78,20 @@ async function main() {
         if (sheetConfig.restingStatusCell) {
           cellsToFetch.push(sheetConfig.restingStatusCell);
         }
+        // Optional cells for extended reporting
+        const optionalCellKeys = [
+          "ownedAndCarriedLootCell",
+          "paidAndCarriedLootCell",
+          "currentMoraleCell",
+          "restingMoraleCell",
+          "armyLengthCell",
+          "forcedMarchDaysCell",
+          "shippingStatusCell",
+          "supplyShipsCountCell",
+        ];
+        optionalCellKeys.forEach((key) => {
+          if (sheetConfig[key]) cellsToFetch.push(sheetConfig[key]);
+        });
 
         // Get data from Google Sheets using batch API to reduce quota usage
         const cellValues = await sheetsService.getCellValuesBatch(
@@ -88,9 +103,36 @@ async function main() {
         const currentSupplies = cellValues[sheetConfig.currentSuppliesCell];
         const dailyConsumption = cellValues[sheetConfig.dailyConsumptionCell];
         const totalCarriedRaw = cellValues[sheetConfig.totalCarriedCell];
-        const carryingCapacityRaw = cellValues[sheetConfig.currentCarryingCapacityCell];
+        const carryingCapacityRaw =
+          cellValues[sheetConfig.currentCarryingCapacityCell];
         const restingStatusRaw = sheetConfig.restingStatusCell
           ? cellValues[sheetConfig.restingStatusCell]
+          : null;
+
+        // Extract optional values
+        const ownedAndCarriedLootRaw = sheetConfig.ownedAndCarriedLootCell
+          ? cellValues[sheetConfig.ownedAndCarriedLootCell]
+          : null;
+        const paidAndCarriedLootRaw = sheetConfig.paidAndCarriedLootCell
+          ? cellValues[sheetConfig.paidAndCarriedLootCell]
+          : null;
+        const currentMoraleRaw = sheetConfig.currentMoraleCell
+          ? cellValues[sheetConfig.currentMoraleCell]
+          : null;
+        const restingMoraleRaw = sheetConfig.restingMoraleCell
+          ? cellValues[sheetConfig.restingMoraleCell]
+          : null;
+        const armyLengthRaw = sheetConfig.armyLengthCell
+          ? cellValues[sheetConfig.armyLengthCell]
+          : null;
+        const forcedMarchDaysRaw = sheetConfig.forcedMarchDaysCell
+          ? cellValues[sheetConfig.forcedMarchDaysCell]
+          : null;
+        const shippingStatusRaw = sheetConfig.shippingStatusCell
+          ? cellValues[sheetConfig.shippingStatusCell]
+          : null;
+        const supplyShipsCountRaw = sheetConfig.supplyShipsCountCell
+          ? cellValues[sheetConfig.supplyShipsCountCell]
           : null;
 
         // Determine resting status if provided (Google Sheets boolean checkboxes often return TRUE/FALSE)
@@ -140,7 +182,12 @@ async function main() {
         const totalCarried = parseNumericValue(totalCarriedRaw);
         const carryingCapacity = parseNumericValue(carryingCapacityRaw);
 
-        if (isNaN(currentSuppliesFloat) || isNaN(dailyConsumptionFloat) || isNaN(totalCarried) || isNaN(carryingCapacity)) {
+        if (
+          isNaN(currentSuppliesFloat) ||
+          isNaN(dailyConsumptionFloat) ||
+          isNaN(totalCarried) ||
+          isNaN(carryingCapacity)
+        ) {
           throw new Error(
             "Invalid supply, consumption, carried, or capacity values - must be numbers"
           );
@@ -156,8 +203,8 @@ async function main() {
 
         // Check if supplies are already at zero or will hit zero (only relevant if not resting)
         const suppliesWereZero = currentSuppliesFloat === 0;
-        const suppliesHitZero = !isResting &&
-          currentSuppliesFloat > 0 && newSupplyValue === 0;
+        const suppliesHitZero =
+          !isResting && currentSuppliesFloat > 0 && newSupplyValue === 0;
 
         logger.info(
           `${sheetConfig.name}: Current supplies: ${currentSuppliesFloat}, Daily consumption: ${dailyConsumptionFloat}, New supply value: ${newSupplyValue}, Resting: ${isResting}, Total carried: ${totalCarried}, Carrying capacity: ${carryingCapacity}`
@@ -173,7 +220,7 @@ async function main() {
             sheetConfig.sheetName
           );
 
-            logger.info(
+          logger.info(
             `Updated ${sheetConfig.name} current supplies from ${currentSuppliesFloat} to ${newSupplyValue}`
           );
         } else if (isResting) {
@@ -186,7 +233,46 @@ async function main() {
           );
         }
 
+        // Parse optional numeric-ish values safely
+        const ownedAndCarriedLoot =
+          ownedAndCarriedLootRaw != null &&
+          ownedAndCarriedLootRaw !== "" &&
+          !isNaN(parseFloat((ownedAndCarriedLootRaw + "").replace(/,/g, "")))
+            ? parseNumericValue(ownedAndCarriedLootRaw)
+            : ownedAndCarriedLootRaw;
+        const paidAndCarriedLoot =
+          paidAndCarriedLootRaw != null &&
+          paidAndCarriedLootRaw !== "" &&
+          !isNaN(parseFloat((paidAndCarriedLootRaw + "").replace(/,/g, "")))
+            ? parseNumericValue(paidAndCarriedLootRaw)
+            : paidAndCarriedLootRaw;
+        const currentMorale =
+          currentMoraleRaw != null ? currentMoraleRaw : null;
+        const restingMorale =
+          restingMoraleRaw != null ? restingMoraleRaw : null;
+        const armyLength =
+          armyLengthRaw != null &&
+          armyLengthRaw !== "" &&
+          !isNaN(parseFloat((armyLengthRaw + "").replace(/,/g, "")))
+            ? parseNumericValue(armyLengthRaw)
+            : armyLengthRaw;
+        const forcedMarchDays =
+          forcedMarchDaysRaw != null &&
+          forcedMarchDaysRaw !== "" &&
+          !isNaN(parseFloat((forcedMarchDaysRaw + "").replace(/,/g, "")))
+            ? parseNumericValue(forcedMarchDaysRaw)
+            : forcedMarchDaysRaw;
+        const shippingStatus =
+          shippingStatusRaw != null ? shippingStatusRaw : null;
+        const supplyShipsCount =
+          supplyShipsCountRaw != null &&
+          supplyShipsCountRaw !== "" &&
+          !isNaN(parseFloat((supplyShipsCountRaw + "").replace(/,/g, "")))
+            ? parseNumericValue(supplyShipsCountRaw)
+            : supplyShipsCountRaw;
+
         // Send appropriate Discord notification based on supply status
+        // (sheetUrl declared above)
         if (!isResting && (suppliesWereZero || suppliesHitZero)) {
           await discordNotifier.sendZeroSupplies({
             name: sheetConfig.name,
@@ -196,9 +282,18 @@ async function main() {
             totalCarried,
             carryingCapacity,
             overCapacity: totalCarried > carryingCapacity,
+            ownedAndCarriedLoot,
+            paidAndCarriedLoot,
+            currentMorale,
+            restingMorale,
+            armyLength,
+            forcedMarchDays,
+            shippingStatus,
+            supplyShipsCount,
+            sheetUrl,
           });
         } else {
-            const daysRemaining = calculateDaysRemaining(
+          const daysRemaining = calculateDaysRemaining(
             newSupplyValue,
             dailyConsumptionFloat
           );
@@ -212,19 +307,17 @@ async function main() {
             totalCarried,
             carryingCapacity,
             overCapacity: totalCarried > carryingCapacity,
+            ownedAndCarriedLoot,
+            paidAndCarriedLoot,
+            currentMorale,
+            restingMorale,
+            armyLength,
+            forcedMarchDays,
+            shippingStatus,
+            supplyShipsCount,
+            sheetUrl,
           });
         }
-
-        logger.info(
-          `Successfully processed ${sheetConfig.name}: ${
-            suppliesWereZero || suppliesHitZero
-              ? "supplies are at zero"
-              : `${calculateDaysRemaining(
-                  newSupplyValue,
-                  dailyConsumptionFloat
-                )} days remaining${isResting ? " (resting day)" : ""}`
-          } | Carry: ${totalCarried}/${carryingCapacity}`
-        );
       } catch (error) {
         logger.error(`Error processing sheet ${sheetConfig.name}:`, error);
 
@@ -234,6 +327,7 @@ async function main() {
             sheetName: sheetConfig.name,
             error: error.message,
             webhookUrl: sheetConfig.webhookUrl,
+            sheetUrl,
           });
         } catch (notifyError) {
           logger.error("Failed to send error notification:", notifyError);
