@@ -4,11 +4,31 @@ Automated supply tracking for Cataphracts campaigns. Monitors Google Sheets for 
 
 ## What it does
 
-- Reads current supplies and daily consumption from Google Sheets
-- Subtracts daily consumption from current supplies
+- Reads current supplies, daily consumption, total carried weight, and carrying capacity from Google Sheets (plus optional extended stats)
+- Optionally detects "resting" days (no consumption applied) via a boolean/checkbox cell
+- Subtracts daily consumption from current supplies (unless resting or already zero)
 - Updates the sheet with new supply levels
-- Sends Discord alerts when supplies are low
+- Calculates days remaining & zero-supplies date
+- Highlights over-capacity situations
+- Sends Discord embeds (normal / warning / critical / zero) with rich field rows & sheet link
+- Sends error embeds on failures
 - Runs automatically once per day (configurable - see below)
+
+## Recent Enhancements
+
+- Added required fields: `totalCarriedCell`, `currentCarryingCapacityCell`
+- Optional `restingStatusCell` to skip daily deduction when TRUE / checked
+- Extended optional metrics (all independent):
+  - `ownedAndCarriedLootCell`
+  - `paidAndCarriedLootCell`
+  - `currentMoraleCell`, `restingMoraleCell`
+  - `armyLengthCell`
+  - `forcedMarchDaysCell`
+  - `shippingStatusCell`
+  - `supplyShipsCountCell`
+- Capacity alert row if total carried > capacity
+- Sheet hyperlink added to embeds
+- Enhanced private logging sanitization for tactical security
 
 ## Setup
 
@@ -25,20 +45,27 @@ Create a Google Cloud project (free):
 
 ### 2. Google Sheets Format
 
-Your sheet must have these cells:
+Your sheet must have at least these cells (you choose addresses):
 
-- **Current Supplies**: A number (e.g., cell B2: `150`)
-- **Daily Consumption**: A number (e.g., cell B3: `5`)
+- Current Supplies (e.g., B2: `150`)
+- Daily Consumption (e.g., B3: `5`)
+- Total Carried (e.g., B4)
+- Current Carrying Capacity (e.g., B5)
 
-Example layout:
+Optional (any or none): Resting Status checkbox (TRUE/FALSE), Loot, Morale, Army Length, Forced March Days, Shipping Status, Supply Ships Count.
+
+Example minimal layout:
 
 ```
-A1: Army                    B1: Saraian 1st Army
-A2: Current Supplies        B2: 150
-A3: Daily Consumption       B3: 5
+A1: Army                       B1: Saraian 1st Army
+A2: Current Supplies           B2: 150
+A3: Daily Consumption          B3: 5
+A4: Total Carried              B4: 420
+A5: Current Carrying Capacity  B5: 400
+A6: Resting Today? (checkbox)  B6: FALSE
 ```
 
-Names & position don't need to match; just so long as you provide the right locations.
+Names & positions do not need to match; you supply the cell references in config.
 
 ### 3. Discord Webhooks
 
@@ -61,7 +88,7 @@ To create: Right-click channel > Edit Channel > Integrations > Create Webhook > 
 To get thread id:
 
 1. User Settings > Advanced > Enable Developer Mode
-1. Right-click thread > Copy Thread ID
+2. Right-click thread > Copy Thread ID
 
 ### 4. GitHub Repository
 
@@ -72,7 +99,7 @@ To get thread id:
 
 ### 5. Configuration
 
-Set `SHEETS_CONFIG` secret to JSON like this:
+Set `SHEETS_CONFIG` secret to JSON like this (FULL example):
 
 ```json
 [
@@ -82,19 +109,53 @@ Set `SHEETS_CONFIG` secret to JSON like this:
     "sheetName": "Supply Tracker",
     "webhookUrl": "https://discord.com/api/webhooks/123/abc?thread_id=456",
     "currentSuppliesCell": "B2",
-    "dailyConsumptionCell": "B3"
+    "dailyConsumptionCell": "B3",
+    "totalCarriedCell": "B4",
+    "currentCarryingCapacityCell": "B5",
+    "restingStatusCell": "B6",
+    "ownedAndCarriedLootCell": "B7",
+    "paidAndCarriedLootCell": "B8",
+    "currentMoraleCell": "B9",
+    "restingMoraleCell": "B10",
+    "armyLengthCell": "B11",
+    "forcedMarchDaysCell": "B12",
+    "shippingStatusCell": "B13",
+    "supplyShipsCountCell": "B14"
   }
 ]
 ```
 
-**Configuration fields:**
+Minimal REQUIRED fields example:
 
-- `name`: Army name for notifications
-- `sheetId`: Google Sheet ID (from URL: `/d/{this-part}/edit`)
-- `sheetName`: Sheet tab name (optional, uses first tab if omitted)
-- `webhookUrl`: Discord webhook URL (with optional thread_id)
-- `currentSuppliesCell`: Cell containing current supplies (e.g., "B2")
-- `dailyConsumptionCell`: Cell containing daily consumption (e.g., "B3")
+```json
+[
+  {
+    "name": "Saraian 1st Army",
+    "sheetId": "1AbCdEf...",
+    "webhookUrl": "https://discord.com/api/webhooks/111/aaa",
+    "currentSuppliesCell": "B2",
+    "dailyConsumptionCell": "B3",
+    "totalCarriedCell": "B4",
+    "currentCarryingCapacityCell": "B5"
+  }
+]
+```
+
+**Required fields:**
+
+- `name` – Army name for notifications
+- `sheetId` – Google Sheet ID (`/d/{id}/edit`)
+- `webhookUrl` – Discord webhook (optionally with `thread_id`)
+- `currentSuppliesCell` – Current supplies value
+- `dailyConsumptionCell` – Daily consumption value (> 0)
+- `totalCarriedCell` – Total carried weight/units
+- `currentCarryingCapacityCell` – Carrying capacity value
+
+**Optional fields:**
+
+- `sheetName` – Sheet tab name
+- `restingStatusCell` – Boolean/checkbox cell; when TRUE, no consumption (name in embed gains "(Resting)")
+- Extended metric cells listed above (appear only if present & non-empty)
 
 ## Timing Configuration
 
@@ -103,70 +164,62 @@ The system runs daily at **midnight EST** (5 AM UTC). To change this:
 1. Edit `.github/workflows/supply-monitor.yml`
 2. Modify the cron schedule: `- cron: "0 5 * * *"`
 
-**Cron format:** `minute hour day month weekday`
+Cron examples (UTC):
 
-- `0 5 * * *` = 5 AM UTC daily (midnight EST)
+- `0 5 * * *` = 5 AM UTC daily (midnight EST/1 AM EDT)
 - `0 12 * * *` = noon UTC daily
 - `0 0 * * 1` = midnight UTC every Monday
 
-**Time zones:** GitHub Actions runs in UTC. Calculate your local time offset.
-
 ## Example Output
-
-The bot sends Discord embeds with supply status:
 
 ### Normal Status (15+ days remaining)
 
 ```
-✅ Supply Status: Saraian 1st Army
-
+✅ Status: Saraian 1st Army
 📅 Current Day: Monday, June 25th
 📦 Current Supplies: 150
 📉 Daily Consumption: 5
 ⏰ Days Remaining: 30 days
 🚨 Zero Supplies Date: Wednesday, July 25th
+🧺 Total Carried: 420
+💪 Carrying Capacity: 400
+⚠️ Capacity Alert (if over capacity)
 ```
 
 ### Warning (4-7 days remaining)
 
 ```
 ⚠️ **WARNING**: Saraian 1st Army supplies are running low. 5 days remaining.
-
-⚠️ Supply Status: Saraian 1st Army
-
-📅 Current Day: Monday, June 25th
-📦 Current Supplies: 25
-📉 Daily Consumption: 5
-⏰ Days Remaining: 5 days
-🚨 Zero Supplies Date: Saturday, June 30th
+⚠️ Status: Saraian 1st Army
+... (fields as above with updated values)
 ```
 
 ### Critical (1-3 days remaining)
 
 ```
 🚨 **URGENT**: Saraian 1st Army supplies are critically low! Only 2 days remaining.
-
-🚨 Supply Status: Saraian 1st Army
-
-📅 Current Day: Monday, June 25th
-📦 Current Supplies: 10
-📉 Daily Consumption: 5
-⏰ Days Remaining: 2 days
-🚨 Zero Supplies Date: Wednesday, June 27th
+🚨 Status: Saraian 1st Army
+... (fields)
 ```
 
-### Zero Supplies
+### Zero Supplies (new formatting)
 
 ```
 🚨 **CRITICAL**: Saraian 1st Army supplies have reached ZERO today! Immediate restocking required.
-
 🚨 ZERO SUPPLIES ALERT: Saraian 1st Army
-
-📅 Current Day: Monday, June 25th
 📦 Current Supplies: 0 (OUT OF STOCK)
+⏰ Days Remaining: 0 days
+(Other optional fields if configured)
+```
+
+### Resting Day Example
+
+```
+✅ Status: Saraian 1st Army (Resting)
+📦 Current Supplies: 150  (unchanged)
 📉 Daily Consumption: 5
-⏰ Days Remaining: 0 days - IMMEDIATE ACTION REQUIRED
-🚨 Status: Supplies have just been depleted today
+⏰ Days Remaining: 30 days
+(Note: Supply not decremented due to rest)
 ```
 
 ## Alert Thresholds
@@ -177,121 +230,97 @@ The bot sends Discord embeds with supply status:
 - **Red** (🚨): 1-3 days remaining
 - **Critical** (🚨): 0 days remaining
 
+Capacity alert triggers if `totalCarried > carryingCapacity`.
+
 ## Multiple Army Examples
 
-### Separate Sheets
+Separate minimal configs:
 
 ```json
 [
   {
     "name": "Saraian 1st Army",
-    "sheetId": "1AbCdEfGhIjKlMnOpQrStUvWxYz123",
+    "sheetId": "1AbCdEf...",
     "webhookUrl": "https://discord.com/api/webhooks/111/aaa",
     "currentSuppliesCell": "B2",
-    "dailyConsumptionCell": "B3"
+    "dailyConsumptionCell": "B3",
+    "totalCarriedCell": "B4",
+    "currentCarryingCapacityCell": "B5"
   },
   {
     "name": "Keltic Raiders",
-    "sheetId": "1ZyXwVuTsRqPoNmLkJiHgFe456",
+    "sheetId": "1ZyXwVu...",
     "webhookUrl": "https://discord.com/api/webhooks/222/bbb",
     "currentSuppliesCell": "B2",
-    "dailyConsumptionCell": "B3"
+    "dailyConsumptionCell": "B3",
+    "totalCarriedCell": "B4",
+    "currentCarryingCapacityCell": "B5"
   }
 ]
 ```
 
-### Multiple Tabs, Same Sheet
+Multiple tabs in one sheet (threaded):
 
 ```json
 [
   {
     "name": "Saraian 1st Army",
-    "sheetId": "1AbCdEfGhIjKlMnOpQrStUvWxYz123",
+    "sheetId": "1AbCdEf...",
     "sheetName": "1st Army",
     "webhookUrl": "https://discord.com/api/webhooks/111/aaa?thread_id=333",
     "currentSuppliesCell": "B2",
-    "dailyConsumptionCell": "B3"
+    "dailyConsumptionCell": "B3",
+    "totalCarriedCell": "B4",
+    "currentCarryingCapacityCell": "B5"
   },
   {
     "name": "Saraian 2nd Army",
-    "sheetId": "1AbCdEfGhIjKlMnOpQrStUvWxYz123",
+    "sheetId": "1AbCdEf...",
     "sheetName": "2nd Army",
     "webhookUrl": "https://discord.com/api/webhooks/111/aaa?thread_id=444",
     "currentSuppliesCell": "B2",
-    "dailyConsumptionCell": "B3"
+    "dailyConsumptionCell": "B3",
+    "totalCarriedCell": "B4",
+    "currentCarryingCapacityCell": "B5"
   }
 ]
 ```
+
+## Resting Days
+
+If `restingStatusCell` evaluates to TRUE (checkbox checked / value TRUE / yes / y / 1), daily consumption is skipped and the embed title appends "(Resting)". Zero-supply alerts are not triggered on resting days unless supplies were already zero.
 
 ## Security & Privacy
 
 This project uses **targeted private logging** to protect sensitive supply data and tactical intelligence while maintaining full debugging capabilities.
 
-### What's Protected in Public Logs
-
-- 🔒 **Supply numbers**: Actual amounts replaced with "X"
-- 🔒 **Tactical status**: "Critically low supplies" → "Supply status updated"
-- 🔒 **Operational intelligence**: Army readiness alerts sanitized
-- 🔒 **Discord webhook URLs**: Authentication tokens hidden
-- 🔒 **Service account details**: Credentials sanitized
-
-### What's Fully Visible in Public Logs
-
-- ✅ **Sheet names**: "Processing sheet: Saraian 1st Army"
-- ✅ **Complete error messages**: Full stack traces and debugging details
-- ✅ **Operation status**: Success/failure, timing, progress
-- ✅ **Configuration issues**: Validation errors, API failures
-
-### Example Comparison
-
-**Local Development:**
-
-```
-[WARN] Saraian 1st Army supplies are critically low
-[ERROR] Saraian 3rd Army supplies have reached zero! Immediate restocking required
-[ERROR] Authentication failed for Google Sheets API
-```
-
-**GitHub Actions (Tactical Intelligence Sanitized):**
-
-```
-[WARN] Saraian 1st Army supply status updated
-[ERROR] Saraian 3rd Army supply status updated! action required
-[ERROR] Authentication failed for Google Sheets API
-```
-
-This approach protects **operational security and tactical intelligence** while maintaining **full transparency for debugging** errors and system status.
-
-**Important**: Log levels (INFO/WARN/ERROR) remain consistent between local development and public logs, preventing analysis of logging patterns to infer tactical situations.
-
-See [Private Logging Documentation](docs/PRIVATE_LOGGING.md) for complete details.
+See [Private Logging Documentation](docs/PRIVATE_LOGGING.md) for full details.
 
 ## Testing
 
-Validate configuration:
+Validate configuration (no sheet mutations, reads & logging only):
 
 ```bash
 npm install
 npm run validate
 ```
 
-Test run (will modify sheets and send Discord messages):
+Functional run (updates sheets and sends Discord embeds):
 
 ```bash
 npm start
 ```
 
-Manual GitHub Actions run: Go to Actions tab > Supply Status Monitor > Run workflow
+Manual GitHub Actions run: Actions tab > Supply Status Monitor > Run workflow
 
 ## Troubleshooting
 
-**"No data found in cell"**: Check cell address format ("B2" not "b2"), verify cell contains numbers
-
-**"Authentication failed"**: Re-encode service account JSON to Base64, check Google Sheets API is enabled
-
-**"Discord webhook failed"**: Verify webhook URL, check if webhook was deleted
-
-**Wrong timing**: Modify cron schedule in `.github/workflows/supply-monitor.yml`
+- "No data found in cell" – Check cell address & ensure value present
+- "Daily consumption must be greater than 0" – Provide positive numeric value
+- "Authentication failed" – Re-encode service account JSON / enable Sheets API
+- "Discord webhook failed" – Verify webhook URL not deleted / correct thread id
+- Wrong timing – Adjust cron in `.github/workflows/supply-monitor.yml`
+- Over capacity message – Review `totalCarriedCell` & `currentCarryingCapacityCell` values
 
 ## License
 
