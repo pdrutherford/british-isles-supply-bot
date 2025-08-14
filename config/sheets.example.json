@@ -14,6 +14,7 @@
     "currentMoraleCell": "C4",
     "restingMoraleCell": "C5",
     "armyLengthCell": "C6",
+    "effectiveArmySizeCell": "C10",
     "forcedMarchDaysCell": "C7",
     "shippingStatusCell": "C8",
     "supplyShipsCountCell": "C9"
@@ -32,6 +33,7 @@
     "currentMoraleCell": "D4",
     "restingMoraleCell": "D5",
     "armyLengthCell": "D6",
+    "effectiveArmySizeCell": "D10",
     "forcedMarchDaysCell": "D7",
     "shippingStatusCell": "D8",
     "supplyShipsCountCell": "D9"

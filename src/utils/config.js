@@ -109,6 +109,7 @@ function validateConfig(config) {
       { key: "currentMoraleCell", label: "currentMoraleCell" },
       { key: "restingMoraleCell", label: "restingMoraleCell" },
       { key: "armyLengthCell", label: "armyLengthCell" },
+      { key: "effectiveArmySizeCell", label: "effectiveArmySizeCell" },
       { key: "forcedMarchDaysCell", label: "forcedMarchDaysCell" },
       { key: "shippingStatusCell", label: "shippingStatusCell" },
       { key: "supplyShipsCountCell", label: "supplyShipsCountCell" },

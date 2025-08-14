@@ -10,7 +10,7 @@ Automated supply tracking for Cataphracts campaigns. Monitors Google Sheets for 
 - Updates the sheet with new supply levels
 - Calculates days remaining & zero-supplies date
 - Highlights over-capacity situations
-- Sends Discord embeds (normal / warning / critical / zero) with rich field rows & sheet link
+- Sends Discord embeds using a compact, readable description (not grid fields), with a sheet link
 - Sends error embeds on failures
 - Runs automatically once per day (configurable - see below)
 
@@ -23,6 +23,7 @@ Automated supply tracking for Cataphracts campaigns. Monitors Google Sheets for 
   - `paidAndCarriedLootCell`
   - `currentMoraleCell`, `restingMoraleCell`
   - `armyLengthCell`
+  - `effectiveArmySizeCell`
   - `forcedMarchDaysCell`
   - `shippingStatusCell`
   - `supplyShipsCountCell`
@@ -172,45 +173,20 @@ Cron examples (UTC):
 
 ## Example Output
 
-### Normal Status (15+ days remaining)
+### Example Output (compact format)
 
 ```
 ✅ Status: Saraian 1st Army
-📅 Current Day: Monday, June 25th
-📦 Current Supplies: 150
-📉 Daily Consumption: 5
-⏰ Days Remaining: 30 days
-🚨 Zero Supplies Date: Wednesday, July 25th
-🧺 Total Carried: 420
-💪 Carrying Capacity: 400
-⚠️ Capacity Alert (if over capacity)
+📅 Wednesday, August 13th • [Open Sheet]
+📦 150 • 📉 5/day • ⏰ 30 days
+🚨 Zero: Wednesday, July 25th
+🧺 420 / 400 (105%)
+😀 9 • 😴 9
+🪖 5,600 • 🛡️ Effective 4,800 • 🏃 0 forced
+🚢 FALSE • 🛳️ 0 ships
 ```
 
-### Warning (4-7 days remaining)
-
-```
-⚠️ **WARNING**: Saraian 1st Army supplies are running low. 5 days remaining.
-⚠️ Status: Saraian 1st Army
-... (fields as above with updated values)
-```
-
-### Critical (1-3 days remaining)
-
-```
-🚨 **URGENT**: Saraian 1st Army supplies are critically low! Only 2 days remaining.
-🚨 Status: Saraian 1st Army
-... (fields)
-```
-
-### Zero Supplies (new formatting)
-
-```
-🚨 **CRITICAL**: Saraian 1st Army supplies have reached ZERO today! Immediate restocking required.
-🚨 ZERO SUPPLIES ALERT: Saraian 1st Army
-📦 Current Supplies: 0 (OUT OF STOCK)
-⏰ Days Remaining: 0 days
-(Other optional fields if configured)
-```
+Zero supplies alert uses the same condensed layout with bold values for zero and an urgent banner message.
 
 ### Resting Day Example
 

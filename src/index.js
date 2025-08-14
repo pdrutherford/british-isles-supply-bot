@@ -85,6 +85,7 @@ async function main() {
           "currentMoraleCell",
           "restingMoraleCell",
           "armyLengthCell",
+          "effectiveArmySizeCell",
           "forcedMarchDaysCell",
           "shippingStatusCell",
           "supplyShipsCountCell",
@@ -125,6 +126,9 @@ async function main() {
         const armyLengthRaw = sheetConfig.armyLengthCell
           ? cellValues[sheetConfig.armyLengthCell]
           : null;
+        const effectiveArmySizeRaw = sheetConfig.effectiveArmySizeCell
+          ? cellValues[sheetConfig.effectiveArmySizeCell]
+          : null;
         const forcedMarchDaysRaw = sheetConfig.forcedMarchDaysCell
           ? cellValues[sheetConfig.forcedMarchDaysCell]
           : null;
@@ -164,6 +168,7 @@ async function main() {
           throw new Error(
             `No data found in daily consumption cell ${sheetConfig.dailyConsumptionCell}`
           );
+          ko;
         }
         if (totalCarriedRaw === null || totalCarriedRaw === undefined) {
           throw new Error(
@@ -206,8 +211,21 @@ async function main() {
         const suppliesHitZero =
           !isResting && currentSuppliesFloat > 0 && newSupplyValue === 0;
 
+        // Calculate how much supply weight was actually consumed today (could be partial if we hit zero)
+        const suppliesConsumedToday = isResting
+          ? 0
+          : Math.max(0, currentSuppliesFloat - newSupplyValue);
+
+        // Adjust total carried to reflect the deduction of supplies already consumed today.
+        // Rationale: The sheet's total carried value represents the state *before* today's automated deduction.
+        // For reporting (capacity %, over-capacity alerts, etc.) we want the post-consumption carrying state.
+        const adjustedTotalCarried = Math.max(
+          0,
+          totalCarried - suppliesConsumedToday
+        );
+
         logger.info(
-          `${sheetConfig.name}: Current supplies: ${currentSuppliesFloat}, Daily consumption: ${dailyConsumptionFloat}, New supply value: ${newSupplyValue}, Resting: ${isResting}, Total carried: ${totalCarried}, Carrying capacity: ${carryingCapacity}`
+          `${sheetConfig.name}: Current supplies: ${currentSuppliesFloat}, Daily consumption: ${dailyConsumptionFloat}, Consumed today: ${suppliesConsumedToday}, New supply value: ${newSupplyValue}, Resting: ${isResting}, Total carried (raw): ${totalCarried}, Total carried (adjusted): ${adjustedTotalCarried}, Carrying capacity: ${carryingCapacity}`
         );
 
         // Only update the sheet if supplies weren't already at zero and not resting
@@ -256,6 +274,12 @@ async function main() {
           !isNaN(parseFloat((armyLengthRaw + "").replace(/,/g, "")))
             ? parseNumericValue(armyLengthRaw)
             : armyLengthRaw;
+        const effectiveArmySize =
+          effectiveArmySizeRaw != null &&
+          effectiveArmySizeRaw !== "" &&
+          !isNaN(parseFloat((effectiveArmySizeRaw + "").replace(/,/g, "")))
+            ? parseNumericValue(effectiveArmySizeRaw)
+            : effectiveArmySizeRaw;
         const forcedMarchDays =
           forcedMarchDaysRaw != null &&
           forcedMarchDaysRaw !== "" &&
@@ -279,14 +303,15 @@ async function main() {
             suppliesWereAlreadyZero: suppliesWereZero,
             dailyConsumption: dailyConsumptionFloat,
             webhookUrl: sheetConfig.webhookUrl,
-            totalCarried,
+            totalCarried: adjustedTotalCarried,
             carryingCapacity,
-            overCapacity: totalCarried > carryingCapacity,
+            overCapacity: adjustedTotalCarried > carryingCapacity,
             ownedAndCarriedLoot,
             paidAndCarriedLoot,
             currentMorale,
             restingMorale,
             armyLength,
+            effectiveArmySize,
             forcedMarchDays,
             shippingStatus,
             supplyShipsCount,
@@ -304,14 +329,15 @@ async function main() {
             dailyConsumption: dailyConsumptionFloat,
             daysRemaining,
             webhookUrl: sheetConfig.webhookUrl,
-            totalCarried,
+            totalCarried: adjustedTotalCarried,
             carryingCapacity,
-            overCapacity: totalCarried > carryingCapacity,
+            overCapacity: adjustedTotalCarried > carryingCapacity,
             ownedAndCarriedLoot,
             paidAndCarriedLoot,
             currentMorale,
             restingMorale,
             armyLength,
+            effectiveArmySize,
             forcedMarchDays,
             shippingStatus,
             supplyShipsCount,

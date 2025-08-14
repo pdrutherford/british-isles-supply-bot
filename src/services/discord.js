@@ -36,76 +36,122 @@ class DiscordNotifier {
     forcedMarchDays,
     shippingStatus,
     supplyShipsCount,
+    effectiveArmySize,
     sheetUrl,
   }) {
     const color = this.getStatusColor(daysRemaining);
     const statusEmoji = this.getStatusEmoji(daysRemaining);
 
-    const mkSpacer = () => ({ name: "\u200B", value: "\u200B", inline: true });
-    const fields = [];
-    const addRow = (row, pad = true) => {
-      if (!row.length) return;
-      const inlineCount = row.filter(f => f.inline).length;
-      if (pad && inlineCount > 0 && inlineCount < 3) {
-        while (row.filter(f => f.inline).length < 3) row.push(mkSpacer());
-      }
-      fields.push(...row);
+    // Build a compact description string instead of many fields
+    const lines = [];
+    const dayLine = `📅 ${this.getCurrentDayNY()}${
+      sheetUrl ? ` • [Open Sheet](${sheetUrl})` : ""
+    }`;
+    lines.push(dayLine);
+
+    // Supplies summary with labels
+    lines.push(
+      `📦 Supplies ${currentSupplies} • 📉 Cons ${dailyConsumption}/d • ⏰ Days ${daysRemaining}`
+    );
+    lines.push(`🚨 Zero Date ${this.getZeroSuppliesDate(daysRemaining)}`);
+
+    // Capacity summary
+    const pct = carryingCapacity
+      ? Math.round((totalCarried / carryingCapacity) * 100)
+      : null;
+    lines.push(
+      `🧺 Carry ${totalCarried} / ${carryingCapacity}${
+        pct !== null && isFinite(pct) ? ` (${pct}%)` : ""
+      }`
+    );
+
+    // Loot (optional)
+    const lootTokens = [];
+    if (
+      ownedAndCarriedLoot !== undefined &&
+      ownedAndCarriedLoot !== null &&
+      ownedAndCarriedLoot !== ""
+    )
+      lootTokens.push(`Owned ${ownedAndCarriedLoot}`);
+    if (
+      paidAndCarriedLoot !== undefined &&
+      paidAndCarriedLoot !== null &&
+      paidAndCarriedLoot !== ""
+    )
+      lootTokens.push(`Paid ${paidAndCarriedLoot}`);
+    if (lootTokens.length) lines.push(`💰 Loot ${lootTokens.join(" • ")}`);
+
+    // Morale (optional)
+    const moraleTokens = [];
+    if (
+      currentMorale !== undefined &&
+      currentMorale !== null &&
+      currentMorale !== ""
+    )
+      moraleTokens.push(`Cur ${currentMorale}`);
+    if (
+      restingMorale !== undefined &&
+      restingMorale !== null &&
+      restingMorale !== ""
+    )
+      moraleTokens.push(`Rest ${restingMorale}`);
+    if (moraleTokens.length)
+      lines.push(`😀 Morale ${moraleTokens.join(" • ")}`);
+
+    // Army and movement (optional)
+    const armyTokens = [];
+    if (armyLength !== undefined && armyLength !== null && armyLength !== "")
+      armyTokens.push(`Len ${armyLength}`);
+    if (
+      effectiveArmySize !== undefined &&
+      effectiveArmySize !== null &&
+      effectiveArmySize !== ""
+    )
+      armyTokens.push(`Eff ${effectiveArmySize}`);
+    if (
+      forcedMarchDays !== undefined &&
+      forcedMarchDays !== null &&
+      forcedMarchDays !== ""
+    )
+      armyTokens.push(`Forced ${forcedMarchDays}`);
+    if (armyTokens.length) lines.push(`🪖 Army ${armyTokens.join(" • ")}`);
+
+    // Shipping (optional)
+    const shipTokens = [];
+    if (
+      shippingStatus !== undefined &&
+      shippingStatus !== null &&
+      shippingStatus !== ""
+    )
+      shipTokens.push(`Status ${shippingStatus}`);
+    if (
+      supplyShipsCount !== undefined &&
+      supplyShipsCount !== null &&
+      supplyShipsCount !== ""
+    )
+      shipTokens.push(`Ships ${supplyShipsCount}`);
+    if (shipTokens.length) lines.push(`🚢 Ship ${shipTokens.join(" • ")}`);
+
+    if (overCapacity)
+      lines.push(
+        `⚠️ Capacity Alert: carried ${totalCarried} > capacity ${carryingCapacity}`
+      );
+
+    const embed = {
+      title: `${statusEmoji} Status: ${name}`,
+      color,
+      description: lines.join("\n"),
+      timestamp: new Date().toISOString(),
     };
-
-    // Row 1
-    addRow([
-      { name: "📅 Current Day", value: this.getCurrentDayNY(), inline: true },
-      ...(sheetUrl ? [{ name: "🔗 Sheet", value: `[Open Sheet](${sheetUrl})`, inline: true }] : [])
-    ]);
-
-    // Row 2
-    addRow([
-      { name: "📦 Current Supplies", value: `${currentSupplies}`, inline: true },
-      { name: "📉 Daily Consumption", value: `${dailyConsumption}`, inline: true },
-      { name: "⏰ Days Remaining", value: `${daysRemaining} days`, inline: true },
-    ], false); // already 3
-
-    // Row 3
-    fields.push({ name: "🚨 Zero Supplies Date", value: this.getZeroSuppliesDate(daysRemaining), inline: false });
-
-    // Row 4
-    addRow([
-      ...(ownedAndCarriedLoot !== undefined && ownedAndCarriedLoot !== null && ownedAndCarriedLoot !== "" ? [{ name: "💰 Owned & Carried Loot", value: `${ownedAndCarriedLoot}`, inline: true }] : []),
-      ...(paidAndCarriedLoot !== undefined && paidAndCarriedLoot !== null && paidAndCarriedLoot !== "" ? [{ name: "🪙 Paid & Carried Loot", value: `${paidAndCarriedLoot}`, inline: true }] : []),
-    ]);
-
-    // Row 5
-    addRow([
-      { name: "🧺 Total Carried", value: `${totalCarried}`, inline: true },
-      { name: "💪 Carrying Capacity", value: `${carryingCapacity}`, inline: true },
-    ]);
-
-    // Row 6
-    addRow([
-      ...(currentMorale !== undefined && currentMorale !== null && currentMorale !== "" ? [{ name: "😀 Current Morale", value: `${currentMorale}`, inline: true }] : []),
-      ...(restingMorale !== undefined && restingMorale !== null && restingMorale !== "" ? [{ name: "😴 Resting Morale", value: `${restingMorale}`, inline: true }] : []),
-    ]);
-
-    // Row 7
-    addRow([
-      ...(armyLength !== undefined && armyLength !== null && armyLength !== "" ? [{ name: "🪖 Army Length", value: `${armyLength}`, inline: true }] : []),
-      ...(forcedMarchDays !== undefined && forcedMarchDays !== null && forcedMarchDays !== "" ? [{ name: "🏃 Forced March Days", value: `${forcedMarchDays}`, inline: true }] : []),
-    ]);
-
-    // Row 8
-    addRow([
-      ...(shippingStatus !== undefined && shippingStatus !== null && shippingStatus !== "" ? [{ name: "🚢 Shipping?", value: `${shippingStatus}`, inline: true }] : []),
-      ...(supplyShipsCount !== undefined && supplyShipsCount !== null && supplyShipsCount !== "" ? [{ name: "🛳️ # of Supply Ships", value: `${supplyShipsCount}`, inline: true }] : []),
-    ]);
-
-    if (overCapacity) {
-      fields.push({ name: "⚠️ Capacity Alert", value: `Total carried (${totalCarried}) exceeds carrying capacity (${carryingCapacity}). Reduce load!`, inline: false });
-    }
-
-    const embed = { title: `${statusEmoji} Status: ${name}`, color, fields, timestamp: new Date().toISOString() };
     const payload = { embeds: [embed] };
-    if (daysRemaining <= 3) payload.content = `🚨 **URGENT**: ${name} supplies are critically low! Only ${daysRemaining} days remaining.`; else if (daysRemaining <= 7) payload.content = `⚠️ **WARNING**: ${name} supplies are running low. ${daysRemaining} days remaining.`;
-    if (overCapacity) payload.content = (payload.content ? payload.content + "\n" : "") + `⚠️ **OVER CAPACITY**: Carried ${totalCarried} / Capacity ${carryingCapacity}`;
+    if (daysRemaining <= 3)
+      payload.content = `🚨 **URGENT**: ${name} supplies are critically low! Only ${daysRemaining} days remaining.`;
+    else if (daysRemaining <= 7)
+      payload.content = `⚠️ **WARNING**: ${name} supplies are running low. ${daysRemaining} days remaining.`;
+    if (overCapacity)
+      payload.content =
+        (payload.content ? payload.content + "\n" : "") +
+        `⚠️ **OVER CAPACITY**: Carried ${totalCarried} / Capacity ${carryingCapacity}`;
     await this.sendWebhook(webhookUrl, payload);
     logger.info(`Sent supply status notification for ${name}`);
   }
@@ -162,70 +208,115 @@ class DiscordNotifier {
     forcedMarchDays,
     shippingStatus,
     supplyShipsCount,
+    effectiveArmySize,
     sheetUrl,
   }) {
-    const mkSpacer = () => ({ name: "\u200B", value: "\u200B", inline: true });
-    const fields = [];
-    const addRow = (row, pad = true) => {
-      if (!row.length) return;
-      const inlineCount = row.filter(f => f.inline).length;
-      if (pad && inlineCount > 0 && inlineCount < 3) {
-        while (row.filter(f => f.inline).length < 3) row.push(mkSpacer());
-      }
-      fields.push(...row);
+    // Build compact description for zero supplies
+    const lines = [];
+    lines.push(
+      `📅 ${this.getCurrentDayNY()}${
+        sheetUrl ? ` • [Open Sheet](${sheetUrl})` : ""
+      }`
+    );
+    lines.push(
+      `📦 Supplies **0 (OUT)** • 📉 Cons ${dailyConsumption}/d • ⏰ Days **0**`
+    );
+    lines.push(`🚨 Zero Date ${this.getCurrentDayNY()}`);
+
+    const pctZero = carryingCapacity
+      ? Math.round((totalCarried / carryingCapacity) * 100)
+      : null;
+    lines.push(
+      `🧺 Carry ${totalCarried} / ${carryingCapacity}${
+        pctZero !== null && isFinite(pctZero) ? ` (${pctZero}%)` : ""
+      }`
+    );
+
+    const lootTokensZ = [];
+    if (
+      ownedAndCarriedLoot !== undefined &&
+      ownedAndCarriedLoot !== null &&
+      ownedAndCarriedLoot !== ""
+    )
+      lootTokensZ.push(`Owned ${ownedAndCarriedLoot}`);
+    if (
+      paidAndCarriedLoot !== undefined &&
+      paidAndCarriedLoot !== null &&
+      paidAndCarriedLoot !== ""
+    )
+      lootTokensZ.push(`Paid ${paidAndCarriedLoot}`);
+    if (lootTokensZ.length) lines.push(`💰 Loot ${lootTokensZ.join(" • ")}`);
+
+    const moraleTokensZ = [];
+    if (
+      currentMorale !== undefined &&
+      currentMorale !== null &&
+      currentMorale !== ""
+    )
+      moraleTokensZ.push(`Cur ${currentMorale}`);
+    if (
+      restingMorale !== undefined &&
+      restingMorale !== null &&
+      restingMorale !== ""
+    )
+      moraleTokensZ.push(`Rest ${restingMorale}`);
+    if (moraleTokensZ.length)
+      lines.push(`😀 Morale ${moraleTokensZ.join(" • ")}`);
+
+    const armyTokensZ = [];
+    if (armyLength !== undefined && armyLength !== null && armyLength !== "")
+      armyTokensZ.push(`Len ${armyLength}`);
+    if (
+      effectiveArmySize !== undefined &&
+      effectiveArmySize !== null &&
+      effectiveArmySize !== ""
+    )
+      armyTokensZ.push(`Eff ${effectiveArmySize}`);
+    if (
+      forcedMarchDays !== undefined &&
+      forcedMarchDays !== null &&
+      forcedMarchDays !== ""
+    )
+      armyTokensZ.push(`Forced ${forcedMarchDays}`);
+    if (armyTokensZ.length) lines.push(`🪖 Army ${armyTokensZ.join(" • ")}`);
+
+    const shipTokensZ = [];
+    if (
+      shippingStatus !== undefined &&
+      shippingStatus !== null &&
+      shippingStatus !== ""
+    )
+      shipTokensZ.push(`Status ${shippingStatus}`);
+    if (
+      supplyShipsCount !== undefined &&
+      supplyShipsCount !== null &&
+      supplyShipsCount !== ""
+    )
+      shipTokensZ.push(`Ships ${supplyShipsCount}`);
+    if (shipTokensZ.length) lines.push(`🚢 Ship ${shipTokensZ.join(" • ")}`);
+
+    if (overCapacity)
+      lines.push(
+        `⚠️ Capacity Alert: carried ${totalCarried} > capacity ${carryingCapacity}`
+      );
+
+    const urgentMessage = suppliesWereAlreadyZero
+      ? `🚨 **CRITICAL**: ${name} supplies are STILL at ZERO! No supplies available for consumption.`
+      : `🚨 **CRITICAL**: ${name} supplies have reached ZERO today! Immediate restocking required.`;
+    const embed = {
+      title: `🚨 ZERO SUPPLIES ALERT: ${name}`,
+      color: 0x8b0000,
+      description: lines.join("\n"),
+      timestamp: new Date().toISOString(),
     };
-
-    // Row 1
-    addRow([
-      { name: "📅 Current Day", value: this.getCurrentDayNY(), inline: true },
-      ...(sheetUrl ? [{ name: "🔗 Sheet", value: `[Open Sheet](${sheetUrl})`, inline: true }] : []),
-    ]);
-
-    // Row 2
-    addRow([
-      { name: "📦 Current Supplies", value: "**0** (OUT OF STOCK)", inline: true },
-      { name: "📉 Daily Consumption", value: `${dailyConsumption}`, inline: true },
-      { name: "⏰ Days Remaining", value: "**0 days**", inline: true },
-    ], false);
-
-    // Row 3
-    fields.push({ name: "🚨 Zero Supplies Date", value: this.getCurrentDayNY(), inline: false });
-
-    // Row 4
-    addRow([
-      ...(ownedAndCarriedLoot !== undefined && ownedAndCarriedLoot !== null && ownedAndCarriedLoot !== "" ? [{ name: "💰 Owned & Carried Loot", value: `${ownedAndCarriedLoot}`, inline: true }] : []),
-      ...(paidAndCarriedLoot !== undefined && paidAndCarriedLoot !== null && paidAndCarriedLoot !== "" ? [{ name: "🪙 Paid & Carried Loot", value: `${paidAndCarriedLoot}`, inline: true }] : []),
-    ]);
-
-    // Row 5
-    addRow([
-      { name: "🧺 Total Carried", value: `${totalCarried}`, inline: true },
-      { name: "💪 Carrying Capacity", value: `${carryingCapacity}`, inline: true },
-    ]);
-
-    // Row 6
-    addRow([
-      ...(currentMorale !== undefined && currentMorale !== null && currentMorale !== "" ? [{ name: "😀 Current Morale", value: `${currentMorale}`, inline: true }] : []),
-      ...(restingMorale !== undefined && restingMorale !== null && restingMorale !== "" ? [{ name: "😴 Resting Morale", value: `${restingMorale}`, inline: true }] : []),
-    ]);
-
-    // Row 7
-    addRow([
-      ...(armyLength !== undefined && armyLength !== null && armyLength !== "" ? [{ name: "🪖 Army Length", value: `${armyLength}`, inline: true }] : []),
-      ...(forcedMarchDays !== undefined && forcedMarchDays !== null && forcedMarchDays !== "" ? [{ name: "🏃 Forced March Days", value: `${forcedMarchDays}`, inline: true }] : []),
-    ]);
-
-    // Row 8
-    addRow([
-      ...(shippingStatus !== undefined && shippingStatus !== null && shippingStatus !== "" ? [{ name: "🚢 Shipping?", value: `${shippingStatus}`, inline: true }] : []),
-      ...(supplyShipsCount !== undefined && supplyShipsCount !== null && supplyShipsCount !== "" ? [{ name: "🛳️ # of Supply Ships", value: `${supplyShipsCount}`, inline: true }] : []),
-    ]);
-
-    if (overCapacity) fields.push({ name: "⚠️ Capacity Alert", value: `Total carried (${totalCarried}) exceeds carrying capacity (${carryingCapacity}). Reduce load!`, inline: false });
-
-    const urgentMessage = suppliesWereAlreadyZero ? `🚨 **CRITICAL**: ${name} supplies are STILL at ZERO! No supplies available for consumption.` : `🚨 **CRITICAL**: ${name} supplies have reached ZERO today! Immediate restocking required.`;
-    const embed = { title: `🚨 ZERO SUPPLIES ALERT: ${name}`, color: 0x8b0000, fields, timestamp: new Date().toISOString() };
-    const payload = { content: urgentMessage + (overCapacity ? `\n⚠️ **OVER CAPACITY**: Carried ${totalCarried} / Capacity ${carryingCapacity}` : ""), embeds: [embed] };
+    const payload = {
+      content:
+        urgentMessage +
+        (overCapacity
+          ? `\n⚠️ **OVER CAPACITY**: Carried ${totalCarried} / Capacity ${carryingCapacity}`
+          : ""),
+      embeds: [embed],
+    };
     await this.sendWebhook(webhookUrl, payload);
     logger.info(`Sent zero supplies alert for ${name}`);
   }
